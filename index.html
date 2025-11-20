@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>FixItNow</title>
+  <style>
+    body {
+      font-family: system-ui, Arial;
+      padding: 24px;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      background-color: #2e004f; /* dark purple */
+      color: #fff;
+    }
+
+    h1, p {
+      text-shadow: 1px 1px 8px rgba(0,0,0,0.6);
+    }
+
+    form {
+      background: #3c006d; /* slightly lighter purple */
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 24px;
+      pointer-events: auto;
+    }
+
+    textarea, input[type="file"] {
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 8px;
+      outline: none;
+      background: #4b007f; /* darker purple */
+      color: #fff;
+      box-shadow: inset 1px 1px 6px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
+    input[type="file"]::-webkit-file-upload-button {
+      background: #4b007f;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background-color: #5a00a0;
+      color: #fff;
+      font-size: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.8), 0 0 12px rgba(138,43,226,0.8);
+    }
+
+    #result {
+      background: #3c006d;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      color: #fff;
+      width: 100%;
+      max-width: 600px;
+      min-height: 100px;
+      white-space: pre-wrap;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>FixItNow</h1>
+  <p>Type the problem (or upload a photo + description).</p>
+
+  <form id="form">
+    <textarea id="problem" rows="3" placeholder="e.g. 'My TV turns on but screen is black'"></textarea>
+    <input type="file" id="image" accept="image/*" />
+    <div style="margin-top:12px; text-align:right;">
+      <button type="submit">Get Fix</button>
+    </div>
+  </form>
+
+  <h3>AI Fix</h3>
+  <div id="result"><em>No result yet.</em></div>
+
+<script>
+const form = document.getElementById('form');
+const resultDiv = document.getElementById('result');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  resultDiv.innerHTML = "<em>Thinking...</em>";
+
+  const problem = document.getElementById('problem').value.trim();
+  const file = document.getElementById('image').files[0];
+
+  if (!problem) { resultDiv.innerHTML = "<b>Enter a problem first.</b>"; return; }
+
+  const fd = new FormData();
+  fd.append('problem', problem);
+  if (file) fd.append('file', file, file.name);
+
+  const url = file ? '/fix-image' : '/fix';
+  try {
+    const r = await fetch(url, { method: 'POST', body: fd });
+    const data = await r.json();
+
+    if (r.status !== 200) {
+      resultDiv.innerHTML = "<pre>Error:\\n" + JSON.stringify(data, null, 2) + "</pre>";
+      return;
+    }
+
+    const html = [];
+    html.push(`<b>Diagnosis:</b> ${escape(data.diagnosis || '—')}`);
+    html.push(`<b>Quick check:</b> ${escape(data.quick_check || '—')}`);
+    html.push(`<b>Risk level:</b> ${escape(data.risk_level || '—')}`);
+    html.push(`<b>Estimated time:</b> ${escape(String(data.time_minutes || '—'))} minutes`);
+    html.push(`<b>Estimated cost:</b> ${escape(data.estimated_cost || '—')}`);
+    if (data.tools && data.tools.length) {
+      html.push(`<b>Tools/parts:</b> ${escape(data.tools.join(', '))}`);
+    }
+    if (data.steps && data.steps.length) {
+      html.push(`<h4>Steps</h4><ol>${data.steps.map(s => `<li>${escape(s)}</li>`).join('')}</ol>`);
+    }
+    if (data.safety_notes) html.push(`<b>Safety:</b> ${escape(data.safety_notes)}`);
+    if (data.when_to_call_pro) html.push(`<b>Call a pro if:</b> ${escape(data.when_to_call_pro)}`);
+    if (data._image_saved) html.push(`<div><b>Uploaded image saved as:</b> ${escape(data._image_saved)}</div>`);
+
+    resultDiv.innerHTML = html.join('<br/>');
+  } catch (err) {
+    resultDiv.innerHTML = `<pre>Network / server error:\n${err}</pre>`;
+  }
+});
+
+function escape(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+</script>
+</body>
+</html>
